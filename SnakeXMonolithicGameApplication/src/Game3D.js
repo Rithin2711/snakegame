@@ -15,18 +15,26 @@ import * as THREE from "three";
  * - onConsumed()
  * - onSnapshot(game_snapshot)
  */
-const GRID_SIZE = 22;
+const GRID_SIZE = 26; // Increased world size for easier navigation
 const UNIT = 1.8;
 const WORLD_SIZE = GRID_SIZE * UNIT;
-const TICK_MS = 65;
-const INIT_SNAKE_LEN = 8;
-const CAMERA_DIST = 32;
+const TICK_MS = 120; // Slower initial speed (was 65ms, now 120ms)
+const INIT_SNAKE_LEN = 6; // Shorter initial snake for easier control
+const CAMERA_DIST = 38; // Pulled back camera for better view
+const COLLISION_TOLERANCE = 0.7; // More forgiving collision detection
 
 const ITEM_TYPES = [
-  {name: "apple", color: 0xff4757, grow: 1, minLen: 0, glow: 0xff6b7a},      // Vibrant red apple
-  {name: "egg", color: 0xffeaa7, grow: 2, minLen: 12, glow: 0xfff3c4},      // Golden egg
-  {name: "mouse", color: 0x636e72, grow: 3, minLen: 20, glow: 0x74b9ff},    // Gray mouse with blue glow
-  {name: "hum", color: 0xfd79a8, grow: 6, minLen: 32, glow: 0xff7675},      // Pink human with red glow
+  {name: "apple", color: 0xff4757, grow: 1, minLen: 0, glow: 0xff6b7a, size: 1.3},      // Larger red apple
+  {name: "berry", color: 0x9b59b6, grow: 1, minLen: 0, glow: 0xc77dff, size: 1.1},     // New easy berry
+  {name: "egg", color: 0xffeaa7, grow: 2, minLen: 8, glow: 0xfff3c4, size: 1.4},       // Easier to reach egg
+  {name: "mouse", color: 0x636e72, grow: 3, minLen: 15, glow: 0x74b9ff, size: 1.5},    // Easier to reach mouse
+  {name: "hum", color: 0xfd79a8, grow: 6, minLen: 25, glow: 0xff7675, size: 1.6},      // Easier to reach human
+];
+
+const POWER_UP_TYPES = [
+  {name: "invincible", color: 0x00ff88, glow: 0x55ffaa, duration: 5000, size: 1.2},    // 5 second invincibility
+  {name: "slowmo", color: 0x00aaff, glow: 0x55ccff, duration: 4000, size: 1.2},       // 4 second slow motion
+  {name: "magnify", color: 0xffaa00, glow: 0xffcc55, duration: 6000, size: 1.2},      // 6 second larger food
 ];
 
 function getRandomInt(a, b) {
@@ -146,6 +154,113 @@ class CameraShake {
   }
 }
 
+// Food guidance arrow system
+class FoodGuide {
+  constructor(scene) {
+    this.scene = scene;
+    this.arrow = null;
+    this.createArrow();
+  }
+
+  createArrow() {
+    // Create a glowing arrow pointing to nearest food
+    const arrowGeometry = new THREE.ConeGeometry(0.3, 1.5, 8);
+    const arrowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.7
+    });
+    this.arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+    this.arrow.visible = false;
+    this.scene.add(this.arrow);
+  }
+
+  update(snakeHead, items) {
+    if (!snakeHead || items.length === 0) {
+      this.arrow.visible = false;
+      return;
+    }
+
+    // Find nearest food item
+    let nearestItem = null;
+    let nearestDistance = Infinity;
+    
+    items.forEach(item => {
+      const distance = cubicDist([snakeHead.x, 0, snakeHead.z], item.pos);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestItem = item;
+      }
+    });
+
+    if (nearestItem && nearestDistance > 3) { // Only show if food is not too close
+      this.arrow.visible = true;
+      
+      // Position arrow above snake head
+      this.arrow.position.set(
+        snakeHead.x * UNIT,
+        4.0,
+        snakeHead.z * UNIT
+      );
+      
+      // Point arrow toward nearest food
+      const direction = new THREE.Vector3(
+        nearestItem.pos[0] * UNIT - snakeHead.x * UNIT,
+        0,
+        nearestItem.pos[2] * UNIT - snakeHead.z * UNIT
+      ).normalize();
+      
+      this.arrow.lookAt(
+        this.arrow.position.x + direction.x,
+        this.arrow.position.y,
+        this.arrow.position.z + direction.z
+      );
+      
+      // Rotate to point down
+      this.arrow.rotation.x = Math.PI / 2;
+      
+      // Add gentle pulse animation
+      const time = performance.now() * 0.003;
+      this.arrow.material.opacity = 0.5 + Math.sin(time) * 0.2;
+    } else {
+      this.arrow.visible = false;
+    }
+  }
+}
+
+// Power-up system for beginner assistance
+class PowerUpSystem {
+  constructor() {
+    this.activePowerUps = new Map();
+  }
+
+  addPowerUp(type, duration) {
+    this.activePowerUps.set(type, {
+      endTime: performance.now() + duration,
+      duration: duration
+    });
+  }
+
+  update() {
+    const now = performance.now();
+    for (const [type, powerUp] of this.activePowerUps.entries()) {
+      if (now >= powerUp.endTime) {
+        this.activePowerUps.delete(type);
+      }
+    }
+  }
+
+  isActive(type) {
+    return this.activePowerUps.has(type);
+  }
+
+  getTimeRemaining(type) {
+    const powerUp = this.activePowerUps.get(type);
+    if (!powerUp) return 0;
+    return Math.max(0, powerUp.endTime - performance.now());
+  }
+}
+
 // Main game scene component
 // PUBLIC_INTERFACE
 function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot }) {
@@ -254,18 +369,18 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
 
-    // Enhanced obstacles with variety
+    // Reduced obstacles for easier navigation
     const obstacles = [];
-    const obstacleCount = 18;
+    const obstacleCount = 10; // Reduced from 18 to 10
     const obstacleTypes = [
-      { geometry: () => new THREE.BoxGeometry(2, 3, 2), color: 0x654321, name: "stone" },
-      { geometry: () => new THREE.ConeGeometry(1.2, 4, 8), color: 0x228b22, name: "tree" },
-      { geometry: () => new THREE.DodecahedronGeometry(1.5), color: 0x8b4513, name: "crystal" },
+      { geometry: () => new THREE.BoxGeometry(1.8, 2.5, 1.8), color: 0x654321, name: "stone" }, // Smaller obstacles
+      { geometry: () => new THREE.ConeGeometry(1.0, 3.5, 8), color: 0x228b22, name: "tree" },
+      { geometry: () => new THREE.DodecahedronGeometry(1.2), color: 0x8b4513, name: "crystal" },
     ];
 
     for (let i = 0; i < obstacleCount; ++i) {
       const [x, , z] = randPos();
-      if (x === 0 && z === 0) continue;
+      if (Math.abs(x) < 3 && Math.abs(z) < 3) continue; // Keep center area clear
       
       const type = obstacleTypes[i % obstacleTypes.length];
       const geometry = type.geometry();
@@ -286,11 +401,106 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       
       scene.add(mesh);
       obstacles.push({ pos: [x, 0, z], mesh, type: type.name });
-    }
+    // Initialize systems
+    // Enhanced snake with better materials
+    let snake = {
+=======
 
-    // Initialize particle system and camera shake
+    // Enhanced snake with better materials
+=======
+=======
+    // Enhanced snake with better materials
+=======
+    // Initialize systems
     const particleSystem = new ParticleSystem(scene);
     const cameraShake = new CameraShake();
+    const foodGuide = new FoodGuide(scene);
+    const powerUpSystem = new PowerUpSystem();
+
+    // Enhanced snake with better materials
+=======
+    // Enhanced snake with better materials
+    let snake = {
+=======
+
+    // Enhanced snake with better materials
+=======
+=======
+    // Enhanced snake with better materials
+    let snake = {
+      body: [],
+      dir: [1, 0, 0],
+      len: INIT_SNAKE_LEN,
+      alive: true,
+      grow: 0,
+      mesh: [],
+    };
+
+    // Enhanced Snake Head with glow effect
+    const snakeHeadGeo = new THREE.SphereGeometry(1.2, 24, 24);
+    const snakeHeadMat = new THREE.MeshStandardMaterial({ 
+      color: 0x00ff41,
+      metalness: 0.3,
+      roughness: 0.2,
+      emissive: 0x004400,
+      emissiveIntensity: 0.2
+    });
+    const snakeHeadMesh = new THREE.Mesh(snakeHeadGeo, snakeHeadMat);
+    snakeHeadMesh.castShadow = true;
+    scene.add(snakeHeadMesh);
+
+    // Enhanced segments with gradient coloring
+    for (let i = 0; i < 70; ++i) {
+      const intensity = 1 - (i / 70) * 0.5; // Fade towards tail
+      const mat = new THREE.MeshStandardMaterial({ 
+        color: new THREE.Color(0x00cc33).multiplyScalar(intensity),
+        metalness: 0.2,
+        roughness: 0.3,
+        emissive: new THREE.Color(0x002200).multiplyScalar(intensity * 0.3)
+      });
+      const geo = new THREE.CylinderGeometry(0.9, 1.0, 1.8, 20);
+      const seg = new THREE.Mesh(geo, mat);
+      seg.visible = false;
+      seg.castShadow = true;
+      scene.add(seg);
+      snake.mesh.push(seg);
+    }
+
+    // Starting body
+    for (let i = 0; i < snake.len; ++i) {
+      snake.body.push({ x: -i, y: 0, z: 0 });
+    }
+
+    let items = [];
+    const eventCb = { onGameOver, onScore, onConsumed, onSnapshot };
+    let score = snake.len - INIT_SNAKE_LEN;
+=======
+    }
+=======
+    // Enhanced snake with better materials
+    let snake = {
+=======
+
+    // Enhanced snake with better materials
+=======
+    }
+
+    // Initialize systems
+    const particleSystem = new ParticleSystem(scene);
+    const cameraShake = new CameraShake();
+    const foodGuide = new FoodGuide(scene);
+    const powerUpSystem = new PowerUpSystem();
+
+    // Enhanced snake with better materials
+=======
+    // Initialize systems
+    const particleSystem = new ParticleSystem(scene);
+    const cameraShake = new CameraShake();
+    const foodGuide = new FoodGuide(scene);
+    const powerUpSystem = new PowerUpSystem();
+
+    // Enhanced snake with better materials
+=======
 
     // Enhanced snake with better materials
     let snake = {
@@ -364,19 +574,38 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       cameraShake.update(camera, cameraPosition, 0.016);
     }
 
-    // Input handling (unchanged)
+    // Enhanced input handling with direction queuing for smoother turns
     let _input = {
       left: false, right: false, up: false, down: false,
       _lastDir: [1, 0, 0],
+      directionQueue: [], // Queue upcoming turns for smoother gameplay
     };
 
     function inputTurn(dir) {
+      // Add to queue instead of immediate turn for smoother control
+      if (_input.directionQueue.length < 2) { // Limit queue size
+        _input.directionQueue.push(dir);
+      }
+    }
+
+    function processDirectionQueue() {
+      if (_input.directionQueue.length === 0) return;
+      
+      const dir = _input.directionQueue.shift();
       const v = [...snake.dir];
-      if (dir === "left") [v[0], v[2]] = [-v[2], v[0]];
-      if (dir === "right") [v[0], v[2]] = [v[2], -v[0]];
-      if (dir === "up" && v[2] !== 0) { v[2] = 0; v[0] = v[0] < 0 ? -1 : 1; }
-      if (dir === "down" && v[0] !== 0) { v[0] = 0; v[2] = v[2] < 0 ? -1 : 1; }
+      
+      // Prevent immediate reversal (hitting own body)
+      if (dir === "left" && !(v[0] === 1 && v[2] === 0)) [v[0], v[2]] = [-v[2], v[0]];
+      else if (dir === "right" && !(v[0] === -1 && v[2] === 0)) [v[0], v[2]] = [v[2], -v[0]];
+      else if (dir === "up" && v[2] !== 0 && !(v[0] === 0 && v[2] === 1)) { v[2] = 0; v[0] = v[0] < 0 ? -1 : 1; }
+      else if (dir === "down" && v[0] !== 0 && !(v[0] === 0 && v[2] === -1)) { v[0] = 0; v[2] = v[2] < 0 ? -1 : 1; }
+      else {
+        // Invalid turn, try again next tick
+        return;
+      }
+      
       snake.dir = v;
+      _input._lastDir = [...snake.dir];
     }
 
     function onKeyDown(e) {
@@ -392,7 +621,6 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
         case "KeyS": inputTurn("down"); break;
         default: return;
       }
-      _input._lastDir = [...snake.dir];
     }
 
     function onKeyUp(e) {
@@ -474,40 +702,49 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       state.current.tick = snap.tick;
     }
 
-    // Enhanced item spawning with glow effects
-    function spawnItem() {
-      const allowed = ITEM_TYPES.filter(it => snake.len >= it.minLen);
-      const choice = allowed[getRandomInt(0, allowed.length)];
-      let pos;
+    // Enhanced item spawning with more food and power-ups
+    function spawnItem(forcePowerUp = false) {
+      let choice, isPowerUp = false;
       
+      if (forcePowerUp || (Math.random() < 0.15 && score > 5)) { // 15% chance for power-up after score > 5
+        choice = POWER_UP_TYPES[getRandomInt(0, POWER_UP_TYPES.length)];
+        isPowerUp = true;
+      } else {
+        const allowed = ITEM_TYPES.filter(it => snake.len >= it.minLen);
+        choice = allowed[getRandomInt(0, allowed.length)];
+      }
+      
+      let pos;
       retry: while (true) {
         pos = randPos();
         for (const b of snake.body) {
-          if (cubicDist([b.x, 0, b.z], pos) < 2.5) continue retry;
+          if (cubicDist([b.x, 0, b.z], pos) < 2.0) continue retry; // Reduced collision distance
         }
         for (const ob of obstacles) {
-          if (cubicDist([ob.pos[0], 0, ob.pos[2]], pos) < 2.5) continue retry;
+          if (cubicDist([ob.pos[0], 0, ob.pos[2]], pos) < 2.0) continue retry;
         }
         for (const it of items) {
-          if (cubicDist(it.pos, pos) < 2.5) continue retry;
+          if (cubicDist(it.pos, pos) < 2.0) continue retry;
         }
         break;
       }
 
       const material = new THREE.MeshStandardMaterial({ 
         color: choice.color,
-        metalness: 0.3,
-        roughness: 0.2,
+        metalness: isPowerUp ? 0.6 : 0.3,
+        roughness: isPowerUp ? 0.1 : 0.2,
         emissive: choice.glow,
-        emissiveIntensity: 0.15
+        emissiveIntensity: isPowerUp ? 0.3 : 0.15
       });
       
       let geo;
-      if (choice.name === "apple") geo = new THREE.SphereGeometry(1, 20, 20);
-      else if (choice.name === "egg") geo = new THREE.SphereGeometry(1.2, 16, 20);
-      else if (choice.name === "mouse") geo = new THREE.BoxGeometry(1.4, 0.9, 1.4);
-      else if (choice.name === "hum") geo = new THREE.CylinderGeometry(1.2, 1.2, 2.2, 24);
-      else geo = new THREE.SphereGeometry(1, 12, 12);
+      const size = choice.size || 1;
+      if (choice.name === "apple" || choice.name === "berry") geo = new THREE.SphereGeometry(size, 20, 20);
+      else if (choice.name === "egg") geo = new THREE.SphereGeometry(size, 16, 20);
+      else if (choice.name === "mouse") geo = new THREE.BoxGeometry(size * 1.1, size * 0.7, size * 1.1);
+      else if (choice.name === "hum") geo = new THREE.CylinderGeometry(size, size, size * 1.8, 24);
+      else if (isPowerUp) geo = new THREE.OctahedronGeometry(size, 0); // Distinct shape for power-ups
+      else geo = new THREE.SphereGeometry(size, 12, 12);
       
       const mesh = new THREE.Mesh(geo, material);
       mesh.position.set(pos[0] * UNIT, 1.0, pos[2] * UNIT);
@@ -517,12 +754,14 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       mesh.userData = { 
         originalY: mesh.position.y,
         time: Math.random() * Math.PI * 2,
-        type: choice.name
+        type: choice.name,
+        isPowerUp: isPowerUp
       };
       
       scene.add(mesh);
       items.push({
-        type: choice.name, grow: choice.grow, pos, color: choice.color, mesh
+        type: choice.name, grow: choice.grow || 0, pos, color: choice.color, mesh, 
+        isPowerUp: isPowerUp, duration: choice.duration
       });
     }
 
@@ -530,39 +769,76 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       if (!snake.alive) return;
       state.current.tick++;
       
+      // Process queued direction changes for smoother turning
+      processDirectionQueue();
+      
       let newHead = {
         x: snake.body[0].x + snake.dir[0],
         y: 0,
         z: snake.body[0].z + snake.dir[2]
       };
 
-      // Bounds check
-      if (Math.abs(newHead.x) > GRID_SIZE / 2 || Math.abs(newHead.z) > GRID_SIZE / 2) {
-        snake.alive = false;
-        cameraShake.trigger(1.0, 0.5);
-        if (eventCb.onGameOver) eventCb.onGameOver(score);
-        return;
-      }
+      // Update power-ups
+      powerUpSystem.update();
+      const isInvincible = powerUpSystem.isActive('invincible');
+      const isSlowMo = powerUpSystem.isActive('slowmo');
 
-      // Self collision
-      for (let i = 0; i < snake.body.length; ++i) {
-        const b = snake.body[i];
-        if (i !== 0 && b.x === newHead.x && b.z === newHead.z) {
+      // Bounds check with more forgiving tolerance
+      if (Math.abs(newHead.x) > (GRID_SIZE / 2) - 1) {
+        if (!isInvincible) {
           snake.alive = false;
           cameraShake.trigger(1.0, 0.5);
           if (eventCb.onGameOver) eventCb.onGameOver(score);
           return;
+        } else {
+          // Bounce off walls when invincible
+          snake.dir = [-snake.dir[0], snake.dir[1], -snake.dir[2]];
+          newHead = {
+            x: snake.body[0].x + snake.dir[0],
+            y: 0,
+            z: snake.body[0].z + snake.dir[2]
+          };
+        }
+      }
+      if (Math.abs(newHead.z) > (GRID_SIZE / 2) - 1) {
+        if (!isInvincible) {
+          snake.alive = false;
+          cameraShake.trigger(1.0, 0.5);
+          if (eventCb.onGameOver) eventCb.onGameOver(score);
+          return;
+        } else {
+          // Bounce off walls when invincible
+          snake.dir = [-snake.dir[0], snake.dir[1], -snake.dir[2]];
+          newHead = {
+            x: snake.body[0].x + snake.dir[0],
+            y: 0,
+            z: snake.body[0].z + snake.dir[2]
+          };
         }
       }
 
-      // Obstacle collision
-      for (const ob of obstacles) {
-        if (Math.round(ob.pos[0]) === Math.round(newHead.x) && 
-            Math.round(ob.pos[2]) === Math.round(newHead.z)) {
-          snake.alive = false;
-          cameraShake.trigger(1.0, 0.5);
-          if (eventCb.onGameOver) eventCb.onGameOver(score);
-          return;
+      // More forgiving self collision (skip head and immediate segment)
+      if (!isInvincible) {
+        for (let i = 3; i < snake.body.length; ++i) { // Start from segment 3 for more forgiveness
+          const b = snake.body[i];
+          if (cubicDist([newHead.x, 0, newHead.z], [b.x, 0, b.z]) < COLLISION_TOLERANCE) {
+            snake.alive = false;
+            cameraShake.trigger(1.0, 0.5);
+            if (eventCb.onGameOver) eventCb.onGameOver(score);
+            return;
+          }
+        }
+      }
+
+      // More forgiving obstacle collision
+      if (!isInvincible) {
+        for (const ob of obstacles) {
+          if (cubicDist([newHead.x, 0, newHead.z], [ob.pos[0], 0, ob.pos[2]]) < COLLISION_TOLERANCE) {
+            snake.alive = false;
+            cameraShake.trigger(1.0, 0.5);
+            if (eventCb.onGameOver) eventCb.onGameOver(score);
+            return;
+          }
         }
       }
 
@@ -574,12 +850,13 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
         snake.body.pop();
       }
 
-      // Item consumption with enhanced effects
+      // Enhanced item consumption with power-up effects
       let consumed = false;
       for (let i = 0; i < items.length; ++i) {
         const it = items[i];
-        if (Math.round(newHead.x) === Math.round(it.pos[0]) && 
-            Math.round(newHead.z) === Math.round(it.pos[2])) {
+        const consumeDistance = it.isPowerUp ? 1.5 : 1.2; // Easier to grab power-ups
+        
+        if (cubicDist([newHead.x, 0, newHead.z], it.pos) < consumeDistance) {
           consumed = true;
           
           // Create particle effect
@@ -591,10 +868,18 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
           // Camera shake on consumption
           cameraShake.trigger(0.2, 0.1);
           
-          if (eventCb.onConsumed) eventCb.onConsumed(it.type);
-          snake.grow += it.grow;
-          snake.len += it.grow;
-          score += it.grow;
+          if (it.isPowerUp) {
+            // Activate power-up
+            powerUpSystem.addPowerUp(it.type, it.duration);
+            if (eventCb.onConsumed) eventCb.onConsumed(`powerup_${it.type}`);
+          } else {
+            // Regular food
+            if (eventCb.onConsumed) eventCb.onConsumed(it.type);
+            snake.grow += it.grow;
+            snake.len += it.grow;
+            score += it.grow;
+          }
+          
           scene.remove(it.mesh);
           items.splice(i, 1);
           spawnItem();
@@ -603,38 +888,64 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       }
       
       if (consumed && eventCb.onScore) eventCb.onScore(score);
-      if (items.length < 2) spawnItem();
+      
+      // Ensure more food items are available (3-4 items)
+      while (items.length < 3) {
+        spawnItem();
+      }
+      if (Math.random() < 0.1 && items.length < 4) { // 10% chance for 4th item
+        spawnItem();
+      }
+      
       if (eventCb.onSnapshot) eventCb.onSnapshot(snapshot());
     }
 
-    // Enhanced render with animations
+    // Enhanced render with animations and guidance
     function render() {
       const time = performance.now() * 0.001;
+      const isSlowMo = powerUpSystem.isActive('slowmo');
+      const timeMultiplier = isSlowMo ? 0.5 : 1.0;
       
-      // Animate items (floating effect)
+      // Animate items (enhanced floating effect)
       items.forEach(item => {
         if (item.mesh && item.mesh.userData) {
-          item.mesh.userData.time += 0.02;
+          item.mesh.userData.time += 0.02 * timeMultiplier;
+          const floatHeight = item.isPowerUp ? 0.4 : 0.2;
           item.mesh.position.y = item.mesh.userData.originalY + 
-            Math.sin(item.mesh.userData.time) * 0.2;
-          item.mesh.rotation.y += 0.01;
+            Math.sin(item.mesh.userData.time) * floatHeight;
+          item.mesh.rotation.y += (item.isPowerUp ? 0.02 : 0.01) * timeMultiplier;
+          
+          // Power-ups have enhanced glow effect
+          if (item.isPowerUp) {
+            const glow = 0.2 + Math.sin(time * 3) * 0.1;
+            item.mesh.material.emissiveIntensity = glow;
+          }
         }
       });
 
       // Update particle system
-      particleSystem.update(0.016);
+      particleSystem.update(0.016 * timeMultiplier);
 
-      // Snake positioning
+      // Snake positioning with power-up effects
       const head = snake.body[0];
       if (head) {
         snakeHeadMesh.position.set(head.x * UNIT, 1.4, head.z * UNIT);
         snakeHeadMesh.visible = true;
         
-        // Add slight head bob
-        snakeHeadMesh.position.y += Math.sin(time * 6) * 0.05;
+        // Enhanced head bob with power-up effects
+        snakeHeadMesh.position.y += Math.sin(time * 6 * timeMultiplier) * 0.05;
+        
+        // Power-up visual effects on snake
+        if (powerUpSystem.isActive('invincible')) {
+          snakeHeadMesh.material.emissive.setHex(0x004400);
+          snakeHeadMesh.material.emissiveIntensity = 0.3 + Math.sin(time * 10) * 0.2;
+        } else {
+          snakeHeadMesh.material.emissive.setHex(0x004400);
+          snakeHeadMesh.material.emissiveIntensity = 0.2;
+        }
       }
 
-      // Body segments with wave motion
+      // Body segments with enhanced effects
       for (let i = 0; i < snake.mesh.length; ++i) {
         if (i < snake.body.length - 1) {
           const b = snake.body[i + 1];
@@ -643,19 +954,27 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
           snake.mesh[i].rotation.x = Math.PI / 2;
           
           // Add subtle wave motion to body
-          snake.mesh[i].position.y += Math.sin(time * 4 - i * 0.2) * 0.03;
+          snake.mesh[i].position.y += Math.sin(time * 4 * timeMultiplier - i * 0.2) * 0.03;
+          
+          // Power-up effects on body
+          if (powerUpSystem.isActive('invincible')) {
+            snake.mesh[i].material.emissiveIntensity = 0.2 + Math.sin(time * 8 - i * 0.3) * 0.1;
+          } else {
+            snake.mesh[i].material.emissiveIntensity = snake.mesh[i].material.emissive.r > 0 ? 0.1 : 0;
+          }
         } else {
           snake.mesh[i].visible = false;
         }
       }
 
-      // Update camera
+      // Update food guidance arrow
       if (head) {
+        foodGuide.update(head, items.filter(item => !item.isPowerUp)); // Only guide to food, not power-ups
         updateCamera(head, snake.dir);
       }
     }
 
-    // Initialize game
+    // Initialize game with more beginner-friendly setup
     const doInit = () => {
       while (items.length > 0) {
         scene.remove(items.pop().mesh);
@@ -669,13 +988,19 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       snake.dir = [1, 0, 0];
       snake.grow = 0;
       score = snake.len - INIT_SNAKE_LEN;
+      _input.directionQueue = []; // Clear direction queue
       
       for (let i = 0; i < snake.mesh.length; ++i) {
         snake.mesh[i].visible = false;
       }
       
-      spawnItem();
-      spawnItem();
+      // Spawn more initial food items for easier start
+      spawnItem(); // Regular food
+      spawnItem(); // Regular food  
+      spawnItem(); // Regular food
+      if (Math.random() < 0.3) { // 30% chance for initial power-up
+        spawnItem(true); // Force power-up
+      }
     };
 
     if (loadData) {
@@ -684,11 +1009,13 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       doInit();
     }
 
-    // Main animation loop
+    // Main animation loop with dynamic speed
     function animate() {
       _animation = requestAnimationFrame(animate);
       
-      if (!paused && running && snake.alive && performance.now() - lastTick > TICK_MS) {
+      const currentTickMs = powerUpSystem.isActive('slowmo') ? TICK_MS * 1.5 : TICK_MS;
+      
+      if (!paused && running && snake.alive && performance.now() - lastTick > currentTickMs) {
         tick();
         lastTick = performance.now();
       }

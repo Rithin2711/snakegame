@@ -53,14 +53,63 @@ function App() {
   const handleConsume = (itemType) => {
     if (eatSound.current) eatSound.current.play();
     
-    // Add visual feedback for score increase
+    // Add visual feedback for consumption
     const scoreElement = document.querySelector('.score-ui');
     if (scoreElement) {
       scoreElement.style.animation = 'none';
       // Trigger reflow to reset animation
       void scoreElement.offsetHeight;
-      scoreElement.style.animation = 'scoreBoost 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+      
+      if (itemType.startsWith('powerup_')) {
+        // Special animation for power-ups
+        scoreElement.style.animation = 'scoreBoost 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+        
+        // Show power-up notification
+        const powerUpType = itemType.replace('powerup_', '');
+        showPowerUpNotification(powerUpType);
+      } else {
+        scoreElement.style.animation = 'scoreBoost 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+      }
     }
+  };
+
+  // PUBLIC_INTERFACE  
+  const showPowerUpNotification = (powerUpType) => {
+    const notifications = {
+      'invincible': '🛡️ Invincible Mode!',
+      'slowmo': '⏰ Slow Motion!',
+      'magnify': '🔍 Bigger Food!'
+    };
+    
+    const message = notifications[powerUpType] || '✨ Power-up!';
+    
+    // Create temporary notification element
+    const notification = document.createElement('div');
+    notification.textContent = message;
+    notification.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(45deg, #00ff88, #00aaff);
+      color: white;
+      padding: 15px 30px;
+      border-radius: 25px;
+      font-size: 1.5rem;
+      font-weight: bold;
+      z-index: 1000;
+      animation: powerUpFade 2s ease-out forwards;
+      font-family: 'Orbitron', monospace;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 2000);
   };
 
   // PUBLIC_INTERFACE
@@ -166,15 +215,33 @@ function App() {
 
         {showHelp && (
           <div className="help-overlay">
-            <h2>How to Play</h2>
+            <h2>🐍 SnakeX Beginner's Guide</h2>
             <ul className="help-list">
-              <li>Use Arrow Keys / WASD to steer the snake in 3D.</li>
-              <li>Eat small objects to grow longer and unlock eating larger things!</li>
-              <li>Avoid hitting your own body or obstacles.</li>
-              <li>[P] to pause, [H] to toggle this help.</li>
-              <li>Your progress can be saved anytime during gameplay.</li>
+              <li><strong>🎮 Controls:</strong> Use Arrow Keys or WASD to turn your snake</li>
+              <li><strong>🍎 Food:</strong> Eat apples (red) and berries (purple) to grow</li>
+              <li><strong>📏 Growth:</strong> Longer snakes can eat bigger items like eggs and mice</li>
+              <li><strong>🏃‍♂️ Speed:</strong> Game starts slow - perfect for learning!</li>
+              <li><strong>🎯 Guidance:</strong> Green arrow points to nearest food</li>
+              <li><strong>✨ Power-ups:</strong> 
+                <ul style={{marginTop: '5px', fontSize: '0.95em'}}>
+                  <li>🛡️ <span style={{color: '#00ff88'}}>Green gems</span> = 5s invincibility</li>
+                  <li>⏰ <span style={{color: '#00aaff'}}>Blue gems</span> = 4s slow motion</li>
+                  <li>🔍 <span style={{color: '#ffaa00'}}>Orange gems</span> = 6s bigger food</li>
+                </ul>
+              </li>
+              <li><strong>💡 Tips:</strong> 
+                <ul style={{marginTop: '5px', fontSize: '0.95em'}}>
+                  <li>Turn before you need to - controls are forgiving</li>
+                  <li>Use walls and obstacles to help plan your path</li>
+                  <li>Power-ups appear more often as you score higher</li>
+                  <li>Collision detection is generous - don't panic!</li>
+                </ul>
+              </li>
+              <li><strong>⚠️ Avoid:</strong> Hitting your own body (after 3rd segment) or obstacles</li>
+              <li><strong>⌨️ Shortcuts:</strong> [P] pause, [H] help, [Space/Enter] start game</li>
+              <li><strong>💾 Save:</strong> Your progress saves automatically during gameplay</li>
             </ul>
-            <button className="ui-btn" onClick={handleShowHelp}>Close</button>
+            <button className="ui-btn" onClick={handleShowHelp}>Got it! Let's Play! 🚀</button>
           </div>
         )}
 

@@ -521,3 +521,26 @@ body {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.7; }
 }
+
+/* Power-up notification animation */
+@keyframes powerUpFade {
+  0% { 
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  20% { 
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  40% { 
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% { 
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% { 
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
