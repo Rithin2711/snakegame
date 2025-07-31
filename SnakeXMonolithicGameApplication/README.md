@@ -81,13 +81,33 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 
 # SnakeX 3D Snake Survival Game (Monolithic Frontend)
 
-# ☝️ IMPORTANT - Audio Assets
+## 🎮 Enhanced Visual Features
+- **Vibrant 3D Environment**: Dynamic gradient backgrounds with animated particles
+- **Advanced Materials**: Realistic lighting, shadows, and metallic/emissive effects
+- **Particle Effects**: Consumption effects with colorful particle bursts
+- **Camera Effects**: Smooth following camera with subtle shake on impacts
+- **Enhanced Snake**: Gradient coloring, glow effects, and smooth animations
+- **Improved Items**: Floating animations, glow effects, and varied geometries
+- **Diverse Obstacles**: Multiple obstacle types (stones, trees, crystals) with unique materials
+- **Polished UI**: Modern design with gradients, blur effects, and smooth transitions
+- **Enhanced Typography**: Google Fonts integration with glowing text effects
+- **Score Effects**: Animated score updates and milestone celebrations
+
+## 🔊 IMPORTANT - Audio Assets
 The `public/eat.mp3` and `public/gameover.mp3` files are dummy placeholders and must be replaced with properly licensed and credited sound effects before public deployment.
 
-## How To Deploy
+## 🚀 How To Deploy
 - Ensure Three.js and Howler audio library are installed via npm.
-- Place audio files under `public/`.
+- Replace placeholder audio files under `public/` with actual MP3 files.
 - Preview at `http://localhost:3000`.
+
+## 🎨 Visual Enhancements
+- **Advanced Lighting**: Multiple light sources including directional, ambient, point, and rim lighting
+- **Material Quality**: PBR materials with metalness, roughness, and emissive properties  
+- **Shadow Mapping**: Real-time shadows for enhanced depth and realism
+- **Post-Processing**: Tone mapping and enhanced color grading
+- **Responsive Design**: Optimized for both desktop and mobile devices
+- **Theme System**: Light and dark themes with smooth transitions
 
 ### `npm run build` fails to minify
 

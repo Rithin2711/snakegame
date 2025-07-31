@@ -50,12 +50,31 @@ function App() {
   };
 
   // PUBLIC_INTERFACE
-  const handleConsume = () => {
+  const handleConsume = (itemType) => {
     if (eatSound.current) eatSound.current.play();
+    
+    // Add visual feedback for score increase
+    const scoreElement = document.querySelector('.score-ui');
+    if (scoreElement) {
+      scoreElement.style.animation = 'none';
+      // Trigger reflow to reset animation
+      void scoreElement.offsetHeight;
+      scoreElement.style.animation = 'scoreBoost 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    }
   };
 
   // PUBLIC_INTERFACE
-  const handleScore = (s) => setScore(s);
+  const handleScore = (s) => {
+    setScore(s);
+    
+    // Add celebration effect for milestone scores
+    if (s > 0 && s % 10 === 0) {
+      const gameUI = document.querySelector('.game-ui');
+      if (gameUI) {
+        gameUI.style.animation = 'milestone 0.6s ease-out';
+      }
+    }
+  };
 
   // PUBLIC_INTERFACE
   const handleSave = (data) => {
@@ -176,4 +195,3 @@ function App() {
 }
 
 export default App;
-
