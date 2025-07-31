@@ -271,6 +271,7 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
     let running = true, lastTick = performance.now();
     let _animation;
     const scene = new THREE.Scene();
+    const mountElement = mountRef.current;
     
     // Enhanced vibrant background with gradient
     const gradientTexture = new THREE.DataTexture(
@@ -401,88 +402,6 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       
       scene.add(mesh);
       obstacles.push({ pos: [x, 0, z], mesh, type: type.name });
-    // Initialize systems
-    // Enhanced snake with better materials
-    let snake = {
-=======
-
-    // Enhanced snake with better materials
-=======
-=======
-    // Enhanced snake with better materials
-=======
-    // Initialize systems
-    const particleSystem = new ParticleSystem(scene);
-    const cameraShake = new CameraShake();
-    const foodGuide = new FoodGuide(scene);
-    const powerUpSystem = new PowerUpSystem();
-
-    // Enhanced snake with better materials
-=======
-    // Enhanced snake with better materials
-    let snake = {
-=======
-
-    // Enhanced snake with better materials
-=======
-=======
-    // Enhanced snake with better materials
-    let snake = {
-      body: [],
-      dir: [1, 0, 0],
-      len: INIT_SNAKE_LEN,
-      alive: true,
-      grow: 0,
-      mesh: [],
-    };
-
-    // Enhanced Snake Head with glow effect
-    const snakeHeadGeo = new THREE.SphereGeometry(1.2, 24, 24);
-    const snakeHeadMat = new THREE.MeshStandardMaterial({ 
-      color: 0x00ff41,
-      metalness: 0.3,
-      roughness: 0.2,
-      emissive: 0x004400,
-      emissiveIntensity: 0.2
-    });
-    const snakeHeadMesh = new THREE.Mesh(snakeHeadGeo, snakeHeadMat);
-    snakeHeadMesh.castShadow = true;
-    scene.add(snakeHeadMesh);
-
-    // Enhanced segments with gradient coloring
-    for (let i = 0; i < 70; ++i) {
-      const intensity = 1 - (i / 70) * 0.5; // Fade towards tail
-      const mat = new THREE.MeshStandardMaterial({ 
-        color: new THREE.Color(0x00cc33).multiplyScalar(intensity),
-        metalness: 0.2,
-        roughness: 0.3,
-        emissive: new THREE.Color(0x002200).multiplyScalar(intensity * 0.3)
-      });
-      const geo = new THREE.CylinderGeometry(0.9, 1.0, 1.8, 20);
-      const seg = new THREE.Mesh(geo, mat);
-      seg.visible = false;
-      seg.castShadow = true;
-      scene.add(seg);
-      snake.mesh.push(seg);
-    }
-
-    // Starting body
-    for (let i = 0; i < snake.len; ++i) {
-      snake.body.push({ x: -i, y: 0, z: 0 });
-    }
-
-    let items = [];
-    const eventCb = { onGameOver, onScore, onConsumed, onSnapshot };
-    let score = snake.len - INIT_SNAKE_LEN;
-=======
-    }
-=======
-    // Enhanced snake with better materials
-    let snake = {
-=======
-
-    // Enhanced snake with better materials
-=======
     }
 
     // Initialize systems
@@ -490,17 +409,6 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
     const cameraShake = new CameraShake();
     const foodGuide = new FoodGuide(scene);
     const powerUpSystem = new PowerUpSystem();
-
-    // Enhanced snake with better materials
-=======
-    // Initialize systems
-    const particleSystem = new ParticleSystem(scene);
-    const cameraShake = new CameraShake();
-    const foodGuide = new FoodGuide(scene);
-    const powerUpSystem = new PowerUpSystem();
-
-    // Enhanced snake with better materials
-=======
 
     // Enhanced snake with better materials
     let snake = {
@@ -781,7 +689,6 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       // Update power-ups
       powerUpSystem.update();
       const isInvincible = powerUpSystem.isActive('invincible');
-      const isSlowMo = powerUpSystem.isActive('slowmo');
 
       // Bounds check with more forgiving tolerance
       if (Math.abs(newHead.x) > (GRID_SIZE / 2) - 1) {
@@ -1026,8 +933,8 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
     animate();
 
     // Mount to DOM
-    if (mountRef.current) {
-      mountRef.current.appendChild(renderer.domElement);
+    if (mountElement) {
+      mountElement.appendChild(renderer.domElement);
     }
 
     // Resize handler
@@ -1046,15 +953,15 @@ function Game3D({ paused, loadData, onGameOver, onScore, onConsumed, onSnapshot 
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
       try {
-        if (mountRef.current && renderer.domElement) {
-          mountRef.current.removeChild(renderer.domElement);
+        if (mountElement && renderer.domElement) {
+          mountElement.removeChild(renderer.domElement);
         }
       } catch (e) {
         console.warn("Cleanup warning:", e);
       }
       renderer.dispose();
     };
-  }, [paused, loadData]);
+  }, [paused, loadData, onGameOver, onScore, onConsumed, onSnapshot]);
 
   return (
     <div 
