@@ -77,6 +77,18 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/a
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
 
+---
+
+# SnakeX 3D Snake Survival Game (Monolithic Frontend)
+
+# ☝️ IMPORTANT - Audio Assets
+The `public/eat.mp3` and `public/gameover.mp3` files are dummy placeholders and must be replaced with properly licensed and credited sound effects before public deployment.
+
+## How To Deploy
+- Ensure Three.js and Howler audio library are installed via npm.
+- Place audio files under `public/`.
+- Preview at `http://localhost:3000`.
+
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
